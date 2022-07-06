@@ -1,6 +1,6 @@
 import json, os
 from dotenv import load_dotenv
-from flask import request, _request_ctx_stack,abort
+from flask import request,abort,Flask
 from functools import wraps
 from jose import jwt
 from urllib.request import urlopen
@@ -11,8 +11,7 @@ AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
 ALGORITHMS = os.getenv("ALGORITHMS")
 API_AUDIENCE = os.getenv("API_AUDIENCE")
 
-token = ""
-
+token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InQyX0RoT0czYWJKV2NGcmtmN3RrXyJ9.eyJpc3MiOiJodHRwczovL2ZzbmQtc3BlbmNlci51cy5hdXRoMC5jb20vIiwic3ViIjoiZ29vZ2xlLW9hdXRoMnwxMDMyNjM0MTg4MDcyODY1Nzc0NDMiLCJhdWQiOiJjb2ZmZWUiLCJpYXQiOjE2NTcxNDM0NTYsImV4cCI6MTY1NzE1MDY1NiwiYXpwIjoiQ2RzUFY1QUVFY3pUdzVPcUNvUkdnUDhKR2lGb1NlTDYiLCJzY29wZSI6IiIsInBlcm1pc3Npb25zIjpbImdldDpkcmlua3MiLCJnZXQ6ZHJpbmtzLWRldGFpbCJdfQ.kx7OiFEy0M7D8yFZAPQAWIRMho-_Wrq-ZUgQXwhZqwTLgjzTOJwlBZ5exDDW9DSboCvGNW8aFeEURzQ8lw6TYhvfTRfQNK9fhmpn7Xhr-Vy_PHzqGKu436v4YebpKflvEU-IGXLXm-rDu-KyK8V17oYG0nFgGgz9L8hOKnLeSh1-I2Cf3rjGEFn_sAuYPrV8164PwVcyP2cUC3Hxd3BE2IpSVIR6_HBZn6gZqLf_6FY8lXg9qv4t-9YV8-xTztE-4Vp8-rEIqayGT4ryBWnlcSv6ynw4IPv1u6ZgwIeDHtUwqvRykLFkKlFzSxlS3Rol53vQZ5AA0qQnkza1SzeY1A"
 ## AuthError Exception
 '''
 AuthError Exception
@@ -38,8 +37,8 @@ def get_token_auth_header():
     return header_parts[1]
 
 
-def check_permissions(permission, payload):
-    if 'permission' not in payload:
+def check_permissions(permission,payload):
+    if 'permissions' not in payload:
         raise AuthError({
             'code':'invalid_claims',
             'description':'Permission not included in JWT.'
@@ -49,41 +48,88 @@ def check_permissions(permission, payload):
             'code':'unauthorized',
             'description':'Permission not found.'
         },403)
+    return True
 
-'''
-@TODO implement verify_decode_jwt(token) method
-    @INPUTS
-        token: a json web token (string)
-
-    it should be an Auth0 token with key id (kid)
-    it should verify the token using Auth0 /.well-known/jwks.json
-    it should decode the payload from the token
-    it should validate the claims
-    return the decoded payload
-
-    !!NOTE urlopen has a common certificate error described here: https://stackoverflow.com/questions/50236117/scraping-ssl-certificate-verify-failed-error-for-http-en-wikipedia-org
-'''
 def verify_decode_jwt(token):
-    raise Exception('Not Implemented')
+    # GET THE PUBLIC KEY FROM AUTH0
+    jsonurl = urlopen(f'https://{AUTH0_DOMAIN}/.well-known/jwks.json')
+    jwks = json.loads(jsonurl.read())
+    
+    # GET HEADER DATA
+    unverified_header = jwt.get_unverified_header(token)
+    
+    # KEY CHOICE
+    rsa_key = {}
+    if 'kid' not in unverified_header:
+        raise AuthError({
+            'code': 'invalid_header',
+            'description': 'Authorization malformed.'
+        }, 401)
 
-'''
-@TODO implement @requires_auth(permission) decorator method
-    @INPUTS
-        permission: string permission (i.e. 'post:drink')
+    for key in jwks['keys']:
+        if key['kid'] == unverified_header['kid']:
+            rsa_key = {
+                'kty': key['kty'],
+                'kid': key['kid'],
+                'use': key['use'],
+                'n': key['n'],
+                'e': key['e']
+            }
+    
+    # VERIFICATION
+    if rsa_key:
+        try:
+            # VALIDATE THE JWT
+            payload = jwt.decode(
+                token,
+                rsa_key,
+                algorithms=ALGORITHMS,
+                audience=API_AUDIENCE,
+                issuer='https://' + AUTH0_DOMAIN + '/'
+            )
 
-    it should use the get_token_auth_header method to get the token
-    it should use the verify_decode_jwt method to decode the jwt
-    it should use the check_permissions method validate claims and check the requested permission
-    return the decorator which passes the decoded payload to the decorated method
-'''
+            return payload
+
+        except jwt.ExpiredSignatureError:
+            raise AuthError({
+                'code': 'token_expired',
+                'description': 'Token expired.'
+            }, 401)
+
+        except jwt.JWTClaimsError:
+            raise AuthError({
+                'code': 'invalid_claims',
+                'description': 'Incorrect claims. Please, check the audience and issuer.'
+            }, 401)
+        except Exception:
+            raise AuthError({
+                'code': 'invalid_header',
+                'description': 'Unable to parse authentication token.'
+            }, 400)
+    raise AuthError({
+                'code': 'invalid_header',
+                'description': 'Unable to find the appropriate key.'
+            }, 400)
+
+
 def requires_auth(permission=''):
     def requires_auth_decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            token = get_token_auth_header()
-            payload = verify_decode_jwt(token)
+            jwt = get_token_auth_header()
+            try:
+                payload = verify_decode_jwt(jwt)
+            except:
+                abort(401)
             check_permissions(permission, payload)
             return f(payload, *args, **kwargs)
-
         return wrapper
     return requires_auth_decorator
+
+app = Flask(__name__)
+
+@app.route('/coffee')
+@requires_auth('get:drinks')
+def images(jwt):
+    print(jwt)
+    return 'not implemented'
