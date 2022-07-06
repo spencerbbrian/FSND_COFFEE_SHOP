@@ -1,13 +1,15 @@
-import json
-from flask import request, _request_ctx_stack
+import json, os
+from dotenv import load_dotenv
+from flask import request, _request_ctx_stack,abort
 from functools import wraps
 from jose import jwt
 from urllib.request import urlopen
 
+load_dotenv()
 
-AUTH0_DOMAIN = 'fsnd-spencer.us.auth0.com'
-ALGORITHMS = ['RS256']
-API_AUDIENCE = 'coffee'
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
+ALGORITHMS = os.getenv("ALGORITHMS")
+API_AUDIENCE = os.getenv("API_AUDIENCE")
 
 token = ""
 
@@ -23,31 +25,30 @@ class AuthError(Exception):
 
 
 ## Auth Header
-
-'''
-@TODO implement get_token_auth_header() method
-    it should attempt to get the header from the request
-        it should raise an AuthError if no header is present
-    it should attempt to split bearer and the token
-        it should raise an AuthError if the header is malformed
-    return the token part of the header
-'''
 def get_token_auth_header():
-   raise Exception('Not Implemented')
+    if 'Authorization' not in request.headers:
+        abort(401)
+    auth_header = request.headers['Authorization']
+    header_parts = auth_header.split(' ')
+    if len(header_parts) != 2:
+        abort(401)
+    elif header_parts[0].lower() != 'bearer':
+        abort(401)
 
-'''
-@TODO implement check_permissions(permission, payload) method
-    @INPUTS
-        permission: string permission (i.e. 'post:drink')
-        payload: decoded jwt payload
+    return header_parts[1]
 
-    it should raise an AuthError if permissions are not included in the payload
-        !!NOTE check your RBAC settings in Auth0
-    it should raise an AuthError if the requested permission string is not in the payload permissions array
-    return true otherwise
-'''
+
 def check_permissions(permission, payload):
-    raise Exception('Not Implemented')
+    if 'permission' not in payload:
+        raise AuthError({
+            'code':'invalid_claims',
+            'description':'Permission not included in JWT.'
+        },400)
+    if permission not in payload['permissions']:
+        raise AuthError({
+            'code':'unauthorized',
+            'description':'Permission not found.'
+        },403)
 
 '''
 @TODO implement verify_decode_jwt(token) method
