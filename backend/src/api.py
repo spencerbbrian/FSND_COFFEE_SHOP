@@ -1,6 +1,6 @@
 import os
-from flask import Flask, request, jsonify, abort
-from sqlalchemy import exc
+from flask import Blueprint, Flask, request, jsonify, abort
+from sqlalchemy import exc, true
 import json
 from flask_cors import CORS
 
@@ -19,7 +19,21 @@ CORS(app)
 '''
 # db_drop_and_create_all()
 
+drinks = Blueprint('drinks', __name__)
 # ROUTES
+@drinks.route('/drinks', methods = ['GET'])
+def retrieve_drinks():
+    try:
+        data = Drink.query.all()
+        if not data:
+            abort(404)
+        drinks = [drink.short() for drink in data]
+        return jsonify({
+            'success':True,
+            'drinks': drinks
+            }),200
+    except exc.SQLAlchemyError:
+        abort(503)
 '''
 @TODO implement endpoint
     GET /drinks
