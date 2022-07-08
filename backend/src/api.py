@@ -32,7 +32,7 @@ def retrieve_drinks():
     except:
         abort(404)
 
-@app.route('/drinks-detail')
+@app.route('/drinks-detail', methods = ['GET'])
 @requires_auth('get:drinks-detail')
 def get_drink_detail(token):
     try:
@@ -64,7 +64,6 @@ def add_drink(token):
             'success':True,
             'drinks':[drink.long()]
         }),200
-    
     except:
         abort(422)
 
