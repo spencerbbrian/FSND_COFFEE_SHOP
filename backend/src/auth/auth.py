@@ -126,9 +126,3 @@ def requires_auth(permission=''):
     return requires_auth_decorator
 
 app = Flask(__name__)
-
-@app.route('/coffee')
-@requires_auth('get:drinks')
-def images(jwt):
-    print(jwt)
-    return 'not implemented'
